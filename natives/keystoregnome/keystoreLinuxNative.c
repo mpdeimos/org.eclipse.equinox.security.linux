@@ -28,7 +28,7 @@ JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_Linux
 	GnomeKeyringInfo *keyringinfo = NULL;
 	int defaultKeyringPasswordFound = 0;
 
-	status = gnome_keyring_get_info_sync("default", &keyringinfo);
+	status = gnome_keyring_get_info_sync(GNOME_KEYRING_DEFAULT, &keyringinfo);
 	
 	if (status == GNOME_KEYRING_RESULT_NO_SUCH_KEYRING) {
 		(*env)->ExceptionClear(env);
@@ -39,7 +39,7 @@ JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_Linux
 		gboolean isLocked = gnome_keyring_info_get_is_locked(keyringinfo);
 		gnome_keyring_info_free(keyringinfo);
 		if (isLocked) {
-			status = gnome_keyring_unlock_sync("default", NULL);
+			status = gnome_keyring_unlock_sync(GNOME_KEYRING_DEFAULT, NULL);
 			if (status != GNOME_KEYRING_RESULT_OK) {
 				(*env)->ExceptionClear(env);
 				char buffer [60];
@@ -109,7 +109,7 @@ JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxPro
 	
 	// attempt to add the password as a network password, using the
 	// service as a remote object and specifying the keyring as "equinox".
-	status = gnome_keyring_set_network_password_sync ("default", 
+	status = gnome_keyring_set_network_password_sync (GNOME_KEYRING_DEFAULT, 
 			accountNameUTF, /* user */
 			NULL, /* domain */
 			NULL, /* server */
@@ -134,3 +134,26 @@ JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxPro
 	}
 }
 
+/** For testing via the cmd line */
+int main (int argc, char ** argv)
+{
+	GnomeKeyringResult status;
+	GnomeKeyringInfo *keyringinfo = NULL;
+	guint32 id = 0;
+	
+	// attempt to add the password as a network password, using the
+	// service as a remote object and specifying the keyring as "equinox".
+	status = gnome_keyring_set_network_password_sync (GNOME_KEYRING_DEFAULT, 
+			"mpdeimos", /* user */
+			NULL, /* domain */
+			NULL, /* server */
+			"equinox.secure.storage", /* object */
+			NULL, /* protocol */
+			NULL, /* authtype */
+			0, /* port */
+			"foobar",
+			&id);
+
+	printf("%d", (int) status);
+	return (int) status;
+}
