@@ -31,7 +31,7 @@ public class LinuxProvider extends PasswordProvider {
 	/**
 	 * Name of the entry for the Gnome keyring
 	 */
-	static final private String serviceName = "equinox.secure.storage"; //$NON-NLS-1$
+	static final private String serviceName = "org.eclipse.equinox.internal.security.linux"; //$NON-NLS-1$
 
 	private native String getKeyringPassword(String service, String account) throws SecurityException;
 
