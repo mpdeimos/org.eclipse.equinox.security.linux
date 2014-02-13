@@ -9,6 +9,8 @@ BUILD_DIR = .
 
 CFLAGS = -shared -fPIC
 
+secretServiceDBus: CC += -DDEBUG
+
 all: libSecretServiceDBus.so install
 
 install: libSecretServiceDBus.so
@@ -16,6 +18,7 @@ install: libSecretServiceDBus.so
 	
 clean:
 	rm libSecretServiceDBus.so secretServiceDBus.o
+	
 
 secretServiceDBus: secretServiceDBus.o
 	$(CC) -fPIC -o $@ $< $(DBUS_LIBS)

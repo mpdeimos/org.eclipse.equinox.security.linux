@@ -13,17 +13,42 @@
 #include <stdlib.h>
 #include <string.h>
 
-void _dbus_fail_if_error(DBusError* error, const char* message);
-char* _dbus_secret_search(DBusConnection* connection, DBusError* error, const char* service, const char* user, const char* type);
-char* _dbus_secret_session_open(DBusConnection* connection, DBusError* error);
-void _dbus_secret_session_close(DBusConnection* connection, DBusError* error, const char* sessionPath);
-char* _dbus_secret_get(DBusConnection* connection, DBusError* error, const  char* sessionPath, const  char* secretPath);
-char* _dbus_secret_create(DBusConnection* connection, DBusError* error, const  char* sessionPath, const char* service, const char* user, const char* type, const char* secret);
+/** Envoronment containing a JNI reference, the DBus connection and the DBus error struct. */
+typedef struct {
+	JNIEnv *jniEnv;
+	DBusConnection* connection;
+	DBusError* error;
+} _Env;
 
-/**
- * Implements the get password functionality.
- */ 
-JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_getKeyringPassword(JNIEnv *env, jobject this, jstring serviceName, jstring accountName) {
+/** Asserts that the condition holds, notifies about the error, and returns FALSE in case of an error. */
+int   _assert(_Env* env, dbus_bool_t condition, const char* message);
+
+/** Asserts that no DBus error occured, notifies about the error, and returns FALSE in case of an error. */
+int   _assert_no_error(_Env* env, const char* message);
+
+/** Initializes the DBus and JNI environment and returns FALSE in case of an error.  */
+int _init_env(_Env* env, JNIEnv* jni);
+
+/** Frees environment handles and memory. */
+void _free_env(_Env* env);
+
+/** Opens a connection to the secret service and returns the session path. Returns NULL in case of error. */
+char* _dbus_secret_session_open(_Env* env);
+
+/** Closes the connection to the secret service. */
+void  _dbus_secret_session_close(_Env* env, const char* sessionPath);
+
+/** Searches the secret service for a path to a single secret according to the specified service, user and type name. Returns NULL in case no secret could be found. */
+char* _dbus_secret_search(_Env* env, const char* service, const char* user, const char* type);
+
+/** Returns the secret stored under the given path. Returns NULL in case of error.*/
+char* _dbus_secret_get(_Env* env, const  char* sessionPath, const  char* secretPath);
+
+/** Creates a new secret for the specified service, user and type name and returns its path. Returns NULL in case of error. */
+char* _dbus_secret_create(_Env* env, const  char* sessionPath, const char* service, const char* user, const char* type, const char* secret);
+
+/** Gets the password with DBus Secret Service. */
+JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_getMasterPassword(JNIEnv* env, jobject this, jstring serviceName, jstring accountName) {
 	const char *serviceNameUTF = (*env)->GetStringUTFChars(env, serviceName, NULL);
 	const char *accountNameUTF = (*env)->GetStringUTFChars(env, accountName, NULL);
 	jstring result;
@@ -35,10 +60,8 @@ JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_Linux
 	return result;
 }
 
-/**
- * Implements the set password functionality.
- */ 
-JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_setKeyringPassword(JNIEnv *env, jobject this, jstring serviceName, jstring accountName, jstring password) {
+/** Sets the password with DBus Secret Service. */
+JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_setMasterPassword(JNIEnv* env, jobject this, jstring serviceName, jstring accountName, jstring password) {
 	const char *serviceNameUTF = (*env)->GetStringUTFChars(env, serviceName, NULL);
 	const char *accountNameUTF = (*env)->GetStringUTFChars(env, accountName, NULL);
 	const char *passwordUTF = (*env)->GetStringUTFChars(env, password, NULL);
@@ -49,59 +72,145 @@ JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxPro
 	(*env)->ReleaseStringUTFChars( env, password, passwordUTF );
 }
 
+#if DEBUG
+
 /** For testing via the cmd line */
 void main(int argc, char** argv)
 {
-	DBusError error;
-	dbus_error_init(&error);
-
-	DBusConnection* connection = dbus_bus_get(DBUS_BUS_SESSION, &error);
-	_dbus_fail_if_error(&error, "Failed to open connection to bus");
+	// Initialize the DBus connection
+	_Env env;
+	if (!_init_env(&env, NULL))
+	{
+		printf("Environment not initialized. Exit.\n");
+		return;
+	}
 	
-	char* session = _dbus_secret_session_open(connection, &error);
+	// Open a session for the secret service
+	char* session = _dbus_secret_session_open(&env);
+	if (session == NULL)
+	{
+		printf("Session not created. Exit.\n");
+		return;
+	}
 	printf("session: %s\n", session);
 	
-	char* path = _dbus_secret_search(connection, &error, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
-	if (path == NULL)
+	// Search for the stored secret
+	char* path = _dbus_secret_search(&env, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
+	if (path == NULL) // Secret not found
 	{
 		printf("path: %s\n", "NULL");
 		
-		path = _dbus_secret_create(connection, &error, session, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master", "foo");
+		// Create a new password
+		path = _dbus_secret_create(&env, session, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master", "foo");
+		if (path == NULL)
+		{
+			printf("Secret not created. Exit.\n");
+			return;
+		}
 		printf("path: %s\n", path);
 		
-		path = _dbus_secret_search(connection, &error, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
+		// Search for the new password
+		path = _dbus_secret_search(&env, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
+		if (path == NULL)
+		{
+			printf("Secret not searchable. Exit.\n");
+			return;
+		}
+
 	}
 	printf("path: %s\n", path);
 	
-	char* secret = _dbus_secret_get(connection, &error, session, path);
+	// Get the actual password string
+	char* secret = _dbus_secret_get(&env, session, path);
+	if (secret == NULL)
+	{
+		printf("Secret not retrievable. Exit.\n");
+		return;
+	}
 	printf("secret: %s\n", secret);
 	
-	_dbus_secret_session_close(connection, &error, session);
+	// Close the secret service session
+	_dbus_secret_session_close(&env, session);
 	
+	_free_env(&env);
+	
+	// Free allocated data
 	free(secret);
 	free(path);
 	free(session);
 }
 
-void _assert(dbus_bool_t condition, const char* message)
+#endif
+
+void _error(_Env* env, const char* message)
 {
-	if (!condition)
-	{
-		fprintf(stderr, "Assertion failed: %s\n", message);
-		exit(0);
-	}
+#if DEBUG
+	fprintf(stderr, message);
+#else
+	(*(env->jniEnv))->ExceptionClear(env->jniEnv);
+	(*(env->jniEnv))->ThrowNew(env, (*(env->jniEnv))->FindClass(env, "java/lang/SecurityException"), message);
+#endif
 }
 
-void _dbus_fail_if_error(DBusError* error, const char* message)
+int _assert(_Env* env, dbus_bool_t condition, const char* message)
 {
-	if (!dbus_error_is_set(error))
+	if (condition)
 	{
-		return;
+		return TRUE;
 	}
 	
-	fprintf(stderr, "%s: %s: %s\n", message, error->name, error->message);
-	dbus_error_free(error);
-	exit(0);
+	char error [192];
+	snprintf(error, 192, "Assertion failed: %s\n", message);
+	_error(env, error);
+	return FALSE;
+}
+
+int _assert_no_error(_Env* env, const char* message)
+{
+	if (!dbus_error_is_set(env->error))
+	{
+		return TRUE;
+	}
+	
+	char error [192];
+	snprintf(error, 192, "%s: %s: %s", message, env->error->name, env->error->message);
+	_error(env, error);
+	
+	dbus_error_free(env->error);
+	
+	return FALSE;
+}
+
+int _init_env(_Env* env, JNIEnv* jni)
+{
+	env->jniEnv = jni;
+	
+	// Initialize the DBus error
+	env->error = (DBusError*) malloc(sizeof(DBusError));
+	dbus_error_init(env->error);
+
+	// Open DBus user session connection
+	env->connection = dbus_bus_get(DBUS_BUS_SESSION, env->error);
+	
+	if (!_assert(env, env->connection != NULL, "Could not create DBus connection.")
+		|| !_assert_no_error(env, "Failed to open connection to DBus."))
+	{
+		return FALSE;
+	}
+	
+	// Ensure we do not tear down the VM on connection exit
+	dbus_connection_set_exit_on_disconnect(env->connection, FALSE);
+	
+	return TRUE;
+}
+
+void _free_env(_Env* env)
+{
+	// Free the error memory
+	free(env->error);
+
+	// Free the DBus connection handle
+	dbus_connection_unref(env->connection);
 }
 
 void _dbus_util_dict_put(DBusMessageIter* dict, const char* key, const char* value)
@@ -123,7 +232,17 @@ void _dbus_util_append_attributes(DBusMessageIter* iter, const char* service, co
 	dbus_message_iter_close_container(iter, &dict);
 }
 
-char* _dbus_secret_session_open(DBusConnection* connection, DBusError* error)
+DBusMessage* _dbus_util_call(_Env* env, DBusMessage* message)
+{
+	DBusMessage* reply =  dbus_connection_send_with_reply_and_block(env->connection, message, -1, env->error);
+	if (!_assert_no_error(env, "Error receiving message"))
+	{
+		return NULL;
+	}
+	return reply;
+}
+
+char* _dbus_secret_session_open(_Env* env)
 {
 	DBusMessage* message = dbus_message_new_method_call(
 		"org.freedesktop.secrets",
@@ -142,13 +261,21 @@ char* _dbus_secret_session_open(DBusConnection* connection, DBusError* error)
 	dbus_message_iter_append_basic(&input, DBUS_TYPE_STRING, &nothing);
 	dbus_message_iter_close_container(&args, &input);
 	
-	DBusMessage* reply =  dbus_connection_send_with_reply_and_block(connection, message, -1, error);
-	_dbus_fail_if_error(error, "Error receiving message");
+	DBusMessage* reply = _dbus_util_call(env, message);
+	if (reply == NULL)
+	{
+		dbus_message_unref (message);
+		return NULL;
+	}
 	
 	DBusMessageIter result;
 	dbus_message_iter_init(reply, &result);
-	_assert(dbus_message_iter_next(&result), "Result does not contain session path.");
-	_assert(dbus_message_iter_get_arg_type(&result) == DBUS_TYPE_OBJECT_PATH, "Expected item of type path.");
+	if (!_assert(env, dbus_message_iter_next(&result), "Result does not contain session path.")
+		|| !_assert(env, dbus_message_iter_get_arg_type(&result) == DBUS_TYPE_OBJECT_PATH, "Expected item of type path."))
+	{
+		dbus_message_unref (message);
+		return NULL;
+	}
 
 	const char* path;
 	dbus_message_iter_get_basic(&result, &path);
@@ -161,7 +288,7 @@ char* _dbus_secret_session_open(DBusConnection* connection, DBusError* error)
 	return pathCopy;
 }
 
-void _dbus_secret_session_close(DBusConnection* connection, DBusError* error, const char* sessionPath)
+void _dbus_secret_session_close(_Env* env, const char* sessionPath)
 {
 	DBusMessage* message = dbus_message_new_method_call(
 		"org.freedesktop.secrets",
@@ -170,13 +297,13 @@ void _dbus_secret_session_close(DBusConnection* connection, DBusError* error, co
 		"Close"
 	); 
 	
-	dbus_connection_send(connection, message, NULL);
-	dbus_connection_flush(connection);
+	dbus_connection_send(env->connection, message, NULL);
+	dbus_connection_flush(env->connection);
 	
-	dbus_message_unref (message);
+	dbus_message_unref(message);
 }
 
-char* _dbus_secret_search(DBusConnection* connection, DBusError* error, const char* service, const char* user, const char* type)
+char* _dbus_secret_search(_Env* env, const char* service, const char* user, const char* type)
 {
 	DBusMessage* message = dbus_message_new_method_call(
 		"org.freedesktop.secrets",
@@ -188,18 +315,24 @@ char* _dbus_secret_search(DBusConnection* connection, DBusError* error, const ch
 	DBusMessageIter args;
 	dbus_message_iter_init_append(message, &args);
 	_dbus_util_append_attributes(&args, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
-	DBusMessage* reply = dbus_connection_send_with_reply_and_block(connection, message, -1, error);
-	_dbus_fail_if_error(error, "Error receiving message");
+	
+	DBusMessage* reply = _dbus_util_call(env, message);
+	if (reply == NULL)
+	{
+		dbus_message_unref (message);
+		return NULL;
+	}
 	
 	DBusMessageIter result;
 	dbus_message_iter_init(reply, &result);
 	DBusMessageIter resultArray;
 	dbus_message_iter_recurse(&result, &resultArray);
-	if (dbus_message_iter_get_arg_type(&resultArray) == DBUS_TYPE_INVALID) // This means that no secret is found
+	if (dbus_message_iter_get_arg_type(&resultArray) == DBUS_TYPE_INVALID // This means that no secret is found
+		|| !_assert(env, dbus_message_iter_get_arg_type(&resultArray) == DBUS_TYPE_OBJECT_PATH, "Expected item of type path."))
 	{
+		dbus_message_unref (message);
 		return NULL;
 	}
-	_assert(dbus_message_iter_get_arg_type(&resultArray) == DBUS_TYPE_OBJECT_PATH, "Expected item of type path.");
 	const char* path;
 	dbus_message_iter_get_basic(&resultArray, &path); // we are just interested in the first element
 
@@ -211,7 +344,7 @@ char* _dbus_secret_search(DBusConnection* connection, DBusError* error, const ch
 	return pathCopy;
 }
 
-char* _dbus_secret_get(DBusConnection* connection, DBusError* error, const char* sessionPath, const char* secretPath)
+char* _dbus_secret_get(_Env* env, const char* sessionPath, const char* secretPath)
 {
 	DBusMessage* message = dbus_message_new_method_call(
 		"org.freedesktop.secrets",
@@ -225,22 +358,33 @@ char* _dbus_secret_get(DBusConnection* connection, DBusError* error, const char*
 		DBUS_TYPE_OBJECT_PATH, &sessionPath,
 		DBUS_TYPE_INVALID
 	);
-	DBusMessage* reply = dbus_connection_send_with_reply_and_block(connection, message, -1, error);
-	_dbus_fail_if_error(error, "Error receiving message");
+	
+	DBusMessage* reply = _dbus_util_call(env, message);
+	if (reply == NULL)
+	{
+		dbus_message_unref (message);
+		return NULL;
+	}
 	
 	DBusMessageIter result;
 	dbus_message_iter_init(reply, &result);
 	DBusMessageIter dataStruct;
 	dbus_message_iter_recurse(&result, &dataStruct);
-	_assert( // forward to 3rd element
-		dbus_message_iter_next(&dataStruct)
-		&& dbus_message_iter_next(&dataStruct),
-		"Result does not contain secret."
-	);
-	_assert(
-		dbus_message_iter_get_arg_type(&dataStruct) == DBUS_TYPE_ARRAY
-		&& dbus_message_iter_get_element_type (&dataStruct) == DBUS_TYPE_BYTE,
-		"Expected array of bytes.");
+	if (!_assert( // forward to 3rd element
+			env,
+			dbus_message_iter_next(&dataStruct)
+			&& dbus_message_iter_next(&dataStruct),
+			"Result does not contain secret."
+		)
+		|| !_assert(
+			env,
+			dbus_message_iter_get_arg_type(&dataStruct) == DBUS_TYPE_ARRAY
+			&& dbus_message_iter_get_element_type (&dataStruct) == DBUS_TYPE_BYTE,
+			"Expected array of bytes."))
+	{
+		dbus_message_unref (message);
+		return NULL;
+	}
 	
 	DBusMessageIter secretArray;
 	dbus_message_iter_recurse (&dataStruct, &secretArray);
@@ -257,7 +401,7 @@ char* _dbus_secret_get(DBusConnection* connection, DBusError* error, const char*
 	return secret;
 }
 
-char* _dbus_secret_create(DBusConnection* connection, DBusError* error, const char* sessionPath, const char* service, const char* user, const char* type, const char* secret)
+char* _dbus_secret_create(_Env* env, const char* sessionPath, const char* service, const char* user, const char* type, const char* secret)
 {
 	DBusMessage* message = dbus_message_new_method_call(
 		"org.freedesktop.secrets",
@@ -317,17 +461,24 @@ char* _dbus_secret_create(DBusConnection* connection, DBusError* error, const ch
 	dbus_message_iter_close_container(&args, &secretStruct);
 	
 	dbus_message_iter_append_basic(&args, DBUS_TYPE_BOOLEAN, &overwrite);
-	DBusMessage* reply = dbus_connection_send_with_reply_and_block(connection, message, -1, error);
-	_dbus_fail_if_error(error, "Error receiving message.");
+	
+	DBusMessage* reply = _dbus_util_call(env, message);
+	if (reply == NULL)
+	{
+		dbus_message_unref (message);
+		return NULL;
+	}
 	
 	const char* secretPath;
-	const char* promptPath;
-	dbus_message_get_args(reply, error, 
+	dbus_message_get_args(reply, env->error, 
 		DBUS_TYPE_OBJECT_PATH, &secretPath,
-		DBUS_TYPE_OBJECT_PATH, &promptPath,
 		DBUS_TYPE_INVALID
 	);
-	_dbus_fail_if_error(error, "Error reading message.");
+	if (!_assert_no_error(env, "Error reading message."))
+	{
+		dbus_message_unref (message);
+		return NULL;
+	}
 
 	char* pathCopy = strdup(secretPath);
 	
@@ -336,4 +487,3 @@ char* _dbus_secret_create(DBusConnection* connection, DBusError* error, const ch
 	
 	return pathCopy;
 }
-
