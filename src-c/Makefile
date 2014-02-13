@@ -12,11 +12,11 @@ all: libSecretServiceDBus.so
 clean:
 	rm -f *.so *.o "test"
 
-test: test.o secretServiceDBus.o
+test: secretServiceDBus-test.o secretServiceDBus.o
 	$(CC) -fPIC -o $@ $^ $(DBUS_LIBS)
 	./test
 
-libSecretServiceDBus.so: secretServiceDBus.o
+libSecretServiceDBus.so: secretServiceDBus-jni.o secretServiceDBus.o
 	$(CC) -shared $(CFLAGS) -o $@ $< $(DBUS_LIBS)
 
 %.o: %.c
