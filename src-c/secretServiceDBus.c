@@ -133,6 +133,7 @@ DBusMessage* _dbus_util_call(_Env* env, DBusMessage* message)
 	DBusMessage* reply =  dbus_connection_send_with_reply_and_block(env->connection, message, -1, env->error);
 	if (!_assert_no_error(env, "Error receiving message"))
 	{
+		dbus_message_unref (reply);
 		return NULL;
 	}
 	return reply;
@@ -169,6 +170,7 @@ char* _dbus_secret_session_open(_Env* env)
 	if (!_assert(env, dbus_message_iter_next(&result), "Result does not contain session path.")
 		|| !_assert(env, dbus_message_iter_get_arg_type(&result) == DBUS_TYPE_OBJECT_PATH, "Expected item of type path."))
 	{
+		dbus_message_unref (reply);
 		dbus_message_unref (message);
 		return NULL;
 	}
@@ -226,6 +228,7 @@ char* _dbus_secret_search(_Env* env, const char* service, const char* user, cons
 	if (dbus_message_iter_get_arg_type(&resultArray) == DBUS_TYPE_INVALID // This means that no secret is found
 		|| !_assert(env, dbus_message_iter_get_arg_type(&resultArray) == DBUS_TYPE_OBJECT_PATH, "Expected item of type path."))
 	{
+		dbus_message_unref (reply);
 		dbus_message_unref (message);
 		return NULL;
 	}
@@ -278,6 +281,7 @@ char* _dbus_secret_get(_Env* env, const char* sessionPath, const char* secretPat
 			&& dbus_message_iter_get_element_type (&dataStruct) == DBUS_TYPE_BYTE,
 			"Expected array of bytes."))
 	{
+		dbus_message_unref (reply);
 		dbus_message_unref (message);
 		return NULL;
 	}
@@ -372,6 +376,7 @@ char* _dbus_secret_create(_Env* env, const char* sessionPath, const char* servic
 	);
 	if (!_assert_no_error(env, "Error reading message."))
 	{
+		dbus_message_unref (reply);
 		dbus_message_unref (message);
 		return NULL;
 	}
