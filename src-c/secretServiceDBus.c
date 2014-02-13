@@ -6,46 +6,11 @@
  * http://www.eclipse.org/legal/epl-v10.html
  *******************************************************************************/
 
-#include <jni.h>
+#include "secretServiceDBus.prv.h"
 #include "secretServiceDBus.h"
-#include <dbus/dbus.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <string.h>
-
-/** Envoronment containing a JNI reference, the DBus connection and the DBus error struct. */
-typedef struct {
-	JNIEnv *jniEnv;
-	DBusConnection* connection;
-	DBusError* error;
-} _Env;
-
-/** Asserts that the condition holds, notifies about the error, and returns FALSE in case of an error. */
-int   _assert(_Env* env, dbus_bool_t condition, const char* message);
-
-/** Asserts that no DBus error occured, notifies about the error, and returns FALSE in case of an error. */
-int   _assert_no_error(_Env* env, const char* message);
-
-/** Initializes the DBus and JNI environment and returns FALSE in case of an error.  */
-int _init_env(_Env* env, JNIEnv* jni);
-
-/** Frees environment handles and memory. */
-void _free_env(_Env* env);
-
-/** Opens a connection to the secret service and returns the session path. Returns NULL in case of error. */
-char* _dbus_secret_session_open(_Env* env);
-
-/** Closes the connection to the secret service. */
-void  _dbus_secret_session_close(_Env* env, const char* sessionPath);
-
-/** Searches the secret service for a path to a single secret according to the specified service, user and type name. Returns NULL in case no secret could be found. */
-char* _dbus_secret_search(_Env* env, const char* service, const char* user, const char* type);
-
-/** Returns the secret stored under the given path. Returns NULL in case of error.*/
-char* _dbus_secret_get(_Env* env, const  char* sessionPath, const  char* secretPath);
-
-/** Creates a new secret for the specified service, user and type name and returns its path. Returns NULL in case of error. */
-char* _dbus_secret_create(_Env* env, const  char* sessionPath, const char* service, const char* user, const char* type, const char* secret);
 
 /** Gets the password with DBus Secret Service. */
 JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_getMasterPassword(JNIEnv* env, jobject this, jstring serviceName, jstring accountName) {
@@ -72,79 +37,10 @@ JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxPro
 	(*env)->ReleaseStringUTFChars( env, password, passwordUTF );
 }
 
-#if DEBUG
-
-/** For testing via the cmd line */
-void main(int argc, char** argv)
-{
-	// Initialize the DBus connection
-	_Env env;
-	if (!_init_env(&env, NULL))
-	{
-		printf("Environment not initialized. Exit.\n");
-		return;
-	}
-	
-	// Open a session for the secret service
-	char* session = _dbus_secret_session_open(&env);
-	if (session == NULL)
-	{
-		printf("Session not created. Exit.\n");
-		return;
-	}
-	printf("session: %s\n", session);
-	
-	// Search for the stored secret
-	char* path = _dbus_secret_search(&env, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
-	if (path == NULL) // Secret not found
-	{
-		printf("path: %s\n", "NULL");
-		
-		// Create a new password
-		path = _dbus_secret_create(&env, session, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master", "foo");
-		if (path == NULL)
-		{
-			printf("Secret not created. Exit.\n");
-			return;
-		}
-		printf("path: %s\n", path);
-		
-		// Search for the new password
-		path = _dbus_secret_search(&env, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
-		if (path == NULL)
-		{
-			printf("Secret not searchable. Exit.\n");
-			return;
-		}
-
-	}
-	printf("path: %s\n", path);
-	
-	// Get the actual password string
-	char* secret = _dbus_secret_get(&env, session, path);
-	if (secret == NULL)
-	{
-		printf("Secret not retrievable. Exit.\n");
-		return;
-	}
-	printf("secret: %s\n", secret);
-	
-	// Close the secret service session
-	_dbus_secret_session_close(&env, session);
-	
-	_free_env(&env);
-	
-	// Free allocated data
-	free(secret);
-	free(path);
-	free(session);
-}
-
-#endif
 
 void _error(_Env* env, const char* message)
 {
-#if DEBUG
+#if TEST
 	fprintf(stderr, message);
 #else
 	(*(env->jniEnv))->ExceptionClear(env->jniEnv);
