@@ -11,6 +11,5 @@ Bundle-Localization: fragment
 Require-Bundle: org.eclipse.swt;bundle-version="[3.4.0,4.0.0)";resolution:=optional
 Export-Package: org.eclipse.equinox.internal.security.linux;x-internal:=true,
  org.eclipse.equinox.internal.security.linux.nls;x-internal:=true
-Bundle-NativeCode: linux/ppc/libkeystoregnome.so; selection-filter="(& (osgi.os=linux) (osgi.arch=ppc))",
- linux/x86/libkeystoregnome.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86))",
- linux/x86_64/libkeystoregnome.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86_64))"
+Bundle-NativeCode: libSecretServiceDBus.x86.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86))",
+ libSecretServiceDBus.x86_64.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86_64))"

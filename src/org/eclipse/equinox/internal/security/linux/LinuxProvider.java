@@ -33,9 +33,9 @@ public class LinuxProvider extends PasswordProvider {
 	 */
 	static final private String serviceName = "org.eclipse.equinox.internal.security.linux"; //$NON-NLS-1$
 
-	private native String getKeyringPassword(String service, String account) throws SecurityException;
+	private native String getMasterPassword(String service, String account) throws SecurityException;
 
-	private native void setKeyringPassword(String serviceName, String accountName, String password) throws SecurityException;
+	private native void setMasterPassword(String serviceName, String accountName, String password) throws SecurityException;
 
 	static {
 		System.loadLibrary("keystoregnome"); //$NON-NLS-1$
