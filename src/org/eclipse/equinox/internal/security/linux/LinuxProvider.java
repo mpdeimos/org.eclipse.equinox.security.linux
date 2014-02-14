@@ -1,12 +1,9 @@
 /*******************************************************************************
- * Copyright (c) 2008 IBM Corporation and others.
+ * Copyright (c) 2014 Martin Poehlmann <http://mpdeimos.com>.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
- * Contributors:
- *     Red Hat Inc. - initial API and implementation
  *******************************************************************************/
 package org.eclipse.equinox.internal.security.linux;
 
@@ -21,74 +18,81 @@ import org.eclipse.equinox.security.storage.provider.IPreferencesContainer;
 import org.eclipse.equinox.security.storage.provider.PasswordProvider;
 import org.osgi.framework.BundleContext;
 
+/**
+ * Provides password for Linux platforms using DBus Secret Service.
+ */
 public class LinuxProvider extends PasswordProvider {
+	/**
+	 * Name of the password in the DBus Secret Service.
+	 */
+	static final private String SERVICE_ID = "org.eclipse.equinox.secure.storage.linux"; //$NON-NLS-1$
 
 	/**
-	 * The length of the randomly generated password in bytes
+	 * The length of the randomly generated password in bytes.
 	 */
 	private final static int PASSWORD_LENGTH = 64;
 
 	/**
-	 * Name of the entry for the Gnome keyring
+	 * Uses JNI to retrieve the password for the given user from DBus Secret Service.
 	 */
-	static final private String serviceName = "org.eclipse.equinox.internal.security.linux"; //$NON-NLS-1$
+	private native String getMasterPassword(String service, String user) throws SecurityException;
 
-	private native String getMasterPassword(String service, String account) throws SecurityException;
-
-	private native void setMasterPassword(String serviceName, String accountName, String password) throws SecurityException;
+	/**
+	 * Uses JNI to store the password for the given user in DBus Secret Service.
+	 */
+	private native void setMasterPassword(String service, String user, String password) throws SecurityException;
 
 	static {
-		System.loadLibrary("keystoregnome"); //$NON-NLS-1$
+		try {
+			System.loadLibrary("secretServiceDBus"); //$NON-NLS-1$
+
+		} catch (Throwable t) {
+			System.err.println(t.getMessage());
+		}
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	public PBEKeySpec getPassword(IPreferencesContainer container, int passwordType) {
 
 		// get the name of the current user
-		String accountName;
+		String user;
 		BundleContext context = AuthPlugin.getDefault().getBundleContext();
 		if (context != null)
-			accountName = context.getProperty("user.name"); //$NON-NLS-1$
+			user = context.getProperty("user.name"); //$NON-NLS-1$
 		else
-			accountName = System.getProperty("user.name"); //$NON-NLS-1$
-		if (accountName == null)
+			user = System.getProperty("user.name"); //$NON-NLS-1$
+		if (user == null)
 			return null;
 
-		boolean newPassword = ((passwordType & CREATE_NEW_PASSWORD) != 0);
-		boolean passwordChange = ((passwordType & PASSWORD_CHANGE) != 0);
-
-		if (!newPassword && !passwordChange) {
-			try {
-				return new PBEKeySpec(getKeyringPassword(serviceName, accountName).toCharArray());
-			} catch (SecurityException e) {
-				AuthPlugin.getDefault().logError(LinuxProviderMessages.getPasswordError, e);
-				return null;
-			}
+		if ((passwordType & CREATE_NEW_PASSWORD) != 0 || (passwordType & PASSWORD_CHANGE) != 0) {
+			return createAndStorePassword(user);
 		}
 
+		try {
+			String masterPassword = getMasterPassword(SERVICE_ID, user);
+			return new PBEKeySpec(masterPassword.toCharArray());
+		} catch (SecurityException e) {
+			AuthPlugin.getDefault().logError(LinuxProviderMessages.getPasswordError, e);
+			return null;
+		}
+	}
+
+	/** Creates and stores the password in the DBus Secret Storage and returns the created password. */
+	private PBEKeySpec createAndStorePassword(String user) {
 		byte[] rawPassword = new byte[PASSWORD_LENGTH];
 		SecureRandom random = new SecureRandom();
 		random.setSeed(System.currentTimeMillis());
 		random.nextBytes(rawPassword);
-		String newPasswordString = Base64.encode(rawPassword);
-
-		// checking again in the retrieval case to minimize possible collisions
-		if (!newPassword && !passwordChange) {
-			try {
-				return new PBEKeySpec(getKeyringPassword(serviceName, accountName).toCharArray());
-			} catch (SecurityException e) {
-				// ignore - we have already logged it above
-			}
-		}
-
-		// add info message in the log
+		String masterPassword = Base64.encode(rawPassword);
 		AuthPlugin.getDefault().logMessage(LinuxProviderMessages.newPasswordGenerated);
-
 		try {
-			setKeyringPassword(serviceName, accountName, newPasswordString);
-			return new PBEKeySpec(newPasswordString.toCharArray());
+			setMasterPassword(SERVICE_ID, user, masterPassword);
 		} catch (SecurityException e) {
 			AuthPlugin.getDefault().logError(LinuxProviderMessages.setPasswordError, e);
 			return null;
 		}
+		return new PBEKeySpec(masterPassword.toCharArray());
 	}
 }
