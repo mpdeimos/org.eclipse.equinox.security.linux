@@ -12,27 +12,106 @@
 #include <stdlib.h>
 #include <string.h>
 
+char* __get_master_password(_Env* env, const char* service, const char* user);
+char* __get_master_password(_Env* env, const char* service, const char* user);
+
 /** Gets the password with DBus Secret Service. */
-JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_getMasterPassword(JNIEnv* env, jobject this, jstring serviceName, jstring accountName) {
-	const char *serviceNameUTF = (*env)->GetStringUTFChars(env, serviceName, NULL);
-	const char *accountNameUTF = (*env)->GetStringUTFChars(env, accountName, NULL);
-	jstring result;
+JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_getMasterPassword(JNIEnv* jni, jobject jThis, jstring jService, jstring jUser)
+{
+	const char* service = (*jni)->GetStringUTFChars(jni, jService, NULL);
+	const char* user = (*jni)->GetStringUTFChars(jni, jUser, NULL);
+	jstring jResult;
+	
+	_Env env;
+	if (_init_env(&env, jni))
+	{
+		char* password = __get_master_password(&env, service, user);
+		if (password != NULL)
+		{
+			jResult = (*jni)->NewStringUTF(jni, password);
+			free(password);
+		}
+	}
+	
+	(*jni)->ReleaseStringUTFChars(jni, jService, service);
+	(*jni)->ReleaseStringUTFChars(jni, jUser, user);
 
-	// free the UTF strings
-	(*env)->ReleaseStringUTFChars( env, serviceName, serviceNameUTF );
-	(*env)->ReleaseStringUTFChars( env, accountName, accountNameUTF );
+	_free_env(&env);
 
-	return result;
+	return jResult;
 }
 
 /** Sets the password with DBus Secret Service. */
-JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_setMasterPassword(JNIEnv* env, jobject this, jstring serviceName, jstring accountName, jstring password) {
-	const char *serviceNameUTF = (*env)->GetStringUTFChars(env, serviceName, NULL);
-	const char *accountNameUTF = (*env)->GetStringUTFChars(env, accountName, NULL);
-	const char *passwordUTF = (*env)->GetStringUTFChars(env, password, NULL);
+JNIEXPORT void JNICALL Java_org_eclipse_equinox_internal_security_linux_LinuxProvider_setMasterPassword(JNIEnv* jni, jobject this, jstring jService, jstring jUser, jstring jPassword)
+{
+	const char *service = (*jni)->GetStringUTFChars(jni, jService, NULL);
+	const char *user = (*jni)->GetStringUTFChars(jni, jUser, NULL);
+	const char *password = (*jni)->GetStringUTFChars(jni, jPassword, NULL);
 
-	// free the UTF strings
-	(*env)->ReleaseStringUTFChars( env, serviceName, serviceNameUTF );
-	(*env)->ReleaseStringUTFChars( env, accountName, accountNameUTF );
-	(*env)->ReleaseStringUTFChars( env, password, passwordUTF );
+	_Env env;
+	if (_init_env(&env, jni))
+	{
+		__set_master_password(&env, service, user, password);
+	}
+	
+	(*jni)->ReleaseStringUTFChars(jni, jService, service);
+	(*jni)->ReleaseStringUTFChars(jni, jUser, user);
+	(*jni)->ReleaseStringUTFChars(jni, jPassword, password);
+	
+	_free_env(&env);
+}
+
+/** Returns the master password for the given service and user, NULL if no password is found. The returned string has to be freed. */
+char* __get_master_password(_Env* env, const char* service, const char* user)
+{
+	// Open a session for the secret service
+	char* session = _dbus_secret_session_open(env);
+	if (session != NULL)
+	{
+		return FALSE;
+	}
+	
+	// Search for the stored secret
+	char* path = _dbus_secret_search(env, service, user, "master");
+	if (path == NULL) // Secret not found
+	{
+		free(session);
+		return NULL;
+	}
+	
+	// Get the actual password string
+	char* secret = _dbus_secret_get(env, session, path);
+	free(path);
+	free(session);
+	
+	if (secret == NULL)
+	{
+		return NULL;
+	}
+	
+	return secret;
+}
+
+/** Stores the master password for the given service and user. Returns FALSE in case of error. */
+int __set_master_password(_Env* env, const char* service, const char* user, const char* password)
+{
+	// Open a session for the secret service
+	char* session = _dbus_secret_session_open(env);
+	if (session != NULL)
+	{
+		return FALSE;
+	}
+	
+	// Create new password
+	char* path = _dbus_secret_create(env, session, service, user, "master", password);
+	free(session);
+	
+	if (path == NULL)
+	{
+		return FALSE;
+	}
+	
+	free(path);
+	
+	return TRUE;
 }

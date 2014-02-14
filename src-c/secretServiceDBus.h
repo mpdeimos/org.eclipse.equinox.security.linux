@@ -14,7 +14,7 @@
 
 /** Envoronment containing a JNI reference, the DBus connection and the DBus error struct. */
 typedef struct {
-	JNIEnv *jniEnv;
+	JNIEnv* jni;
 	DBusConnection* connection;
 	DBusError* error;
 } _Env;

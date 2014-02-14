@@ -7,7 +7,7 @@ CFLAGS = -fPIC
 
 test: CFLAGS += -DTEST
 
-all: libSecretServiceDBus.so
+all: libsecretServiceDBus.so
 
 clean:
 	rm -f *.so *.o "test"
@@ -16,7 +16,7 @@ test: secretServiceDBus-test.o secretServiceDBus.o
 	$(CC) -fPIC -o $@ $^ $(DBUS_LIBS)
 	./test
 
-libSecretServiceDBus.so: secretServiceDBus-jni.o secretServiceDBus.o
+libsecretServiceDBus.so: secretServiceDBus-jni.o secretServiceDBus.o
 	$(CC) -shared $(CFLAGS) -o $@ $< $(DBUS_LIBS)
 
 %.o: %.c
