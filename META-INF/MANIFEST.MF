@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: %fragmentName
 Bundle-SymbolicName: org.eclipse.equinox.security.linux;singleton:=true
-Bundle-Version: 1.0.0.qualifier
+Bundle-Version: 0.1.0.qualifier
 Bundle-Vendor: %providerName
 Fragment-Host: org.eclipse.equinox.security;bundle-version="[1.0.0,2.0.0)"
 Require-Bundle: org.eclipse.swt;bundle-version="[3.4.0,4.0.0)";resolution:=optional
@@ -11,5 +11,5 @@ Eclipse-PlatformFilter: (osgi.os=linux)
 Bundle-Localization: fragment
 Export-Package: org.eclipse.equinox.internal.security.linux;x-internal:=true,
  org.eclipse.equinox.internal.security.linux.nls;x-internal:=true
-Bundle-NativeCode: lib-c/x86/libSecretServiceDBus.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86))",
- lib-c/x86_64/libSecretServiceDBus.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86_64))"
+Bundle-NativeCode: lib-c/x86/libsecretServiceDBus.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86))",
+ lib-c/x86_64/libsecretServiceDBus.so; selection-filter="(& (osgi.os=linux) (osgi.arch=x86_64))"

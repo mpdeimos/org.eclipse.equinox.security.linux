@@ -25,7 +25,7 @@ public class LinuxProvider extends PasswordProvider {
 	/**
 	 * Name of the password in the DBus Secret Service.
 	 */
-	static final private String SERVICE_ID = "org.eclipse.equinox.secure.storage.linux"; //$NON-NLS-1$
+	static final private String SERVICE_ID = "org.eclipse.equinox.security.linux"; //$NON-NLS-1$
 
 	/**
 	 * The length of the randomly generated password in bytes.
@@ -43,12 +43,7 @@ public class LinuxProvider extends PasswordProvider {
 	private native void setMasterPassword(String service, String user, String password) throws SecurityException;
 
 	static {
-		try {
-			System.loadLibrary("secretServiceDBus"); //$NON-NLS-1$
-
-		} catch (Throwable t) {
-			System.err.println(t.getMessage());
-		}
+		System.loadLibrary("secretServiceDBus"); //$NON-NLS-1$
 	}
 
 	/**

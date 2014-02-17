@@ -188,7 +188,7 @@ char* _dbus_secret_search(_Env* env, const char* service, const char* user, cons
 	
 	DBusMessageIter args;
 	dbus_message_iter_init_append(message, &args);
-	_dbus_util_append_attributes(&args, "org.eclipse.equinox.internal.security.linux", "mpdeimos", "master");
+	_dbus_util_append_attributes(&args, service, user, type);
 	
 	DBusMessage* reply = _dbus_util_call(env, message);
 	if (reply == NULL)

@@ -4,3 +4,7 @@
 *.jar
 *.war
 *.ear
+
+src-c/*.so
+src-c/*.o
+src-c/test

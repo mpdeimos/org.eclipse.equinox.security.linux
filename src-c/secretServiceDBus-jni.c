@@ -20,7 +20,8 @@ JNIEXPORT jstring JNICALL Java_org_eclipse_equinox_internal_security_linux_Linux
 {
 	const char* service = (*jni)->GetStringUTFChars(jni, jService, NULL);
 	const char* user = (*jni)->GetStringUTFChars(jni, jUser, NULL);
-	jstring jResult;
+	
+	jstring jResult = (*jni)->NewStringUTF(jni, NULL);
 	
 	_Env env;
 	if (_init_env(&env, jni))
@@ -66,7 +67,7 @@ char* __get_master_password(_Env* env, const char* service, const char* user)
 {
 	// Open a session for the secret service
 	char* session = _dbus_secret_session_open(env);
-	if (session != NULL)
+	if (session == NULL)
 	{
 		return FALSE;
 	}
@@ -97,7 +98,8 @@ int __set_master_password(_Env* env, const char* service, const char* user, cons
 {
 	// Open a session for the secret service
 	char* session = _dbus_secret_session_open(env);
-	if (session != NULL)
+	
+	if (session == NULL)
 	{
 		return FALSE;
 	}
