@@ -5,7 +5,6 @@ Bundle-SymbolicName: org.eclipse.equinox.security.linux;singleton:=true
 Bundle-Version: 0.1.0.qualifier
 Bundle-Vendor: %providerName
 Fragment-Host: org.eclipse.equinox.security;bundle-version="[1.0.0,2.0.0)"
-Require-Bundle: org.eclipse.swt;bundle-version="[3.4.0,4.0.0)";resolution:=optional
 Bundle-RequiredExecutionEnvironment: J2SE-1.4
 Eclipse-PlatformFilter: (osgi.os=linux)
 Bundle-Localization: fragment
